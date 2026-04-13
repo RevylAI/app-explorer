@@ -1,0 +1,6 @@
+workspace/
+reports/screenshots/*.png
+__pycache__/
+*.egg-info/
+dist/
+.venv/
