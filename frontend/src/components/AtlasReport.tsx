@@ -63,7 +63,64 @@ function ScreenInventorySection({ screenMap, screenshotBase }: { screenMap: Scre
       <h2 className="text-[10px] font-mono text-gray-400 uppercase tracking-widest mb-4 border-b border-gray-200 dark:border-gray-800 pb-2">
         Screen Inventory
       </h2>
-      <div className="border border-gray-200 dark:border-gray-800 overflow-hidden">
+
+      {/* Mobile stacked list — same expand state as desktop table */}
+      <div className="md:hidden border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+        {screenMap.screens.map((screen, i) => {
+          const isExpanded = expandedId === screen.screen_id;
+          const imgName = screen.screenshot.split("/").pop();
+          const screenshotUrl = `${screenshotBase}/${imgName}`;
+          return (
+            <div key={screen.screen_id}>
+              <button
+                onClick={() => setExpandedId(isExpanded ? null : screen.screen_id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${isExpanded ? "bg-[#9D61FF]/[0.05]" : "active:bg-[#9D61FF]/[0.06]"}`}
+              >
+                <span className="text-[10px] font-mono text-gray-400 tabular-nums w-5 shrink-0">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-medium text-gray-800 dark:text-gray-200 truncate">{screen.title}</div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] font-mono text-[#9D61FF]/80 truncate">{screen.screen_id}</span>
+                    <span className="text-[9px] font-mono text-gray-400 shrink-0">· {screen.elements.length} el</span>
+                  </div>
+                </div>
+                <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ${isExpanded ? "rotate-90" : ""}`} viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M6 3l5 5-5 5V3z" />
+                </svg>
+              </button>
+              {isExpanded && (
+                <div className="px-3 pb-3 pt-1 bg-gray-50/50 dark:bg-zinc-900/50">
+                  <img
+                    src={screenshotUrl}
+                    alt={screen.title}
+                    loading="lazy"
+                    className="w-full max-h-[60vh] object-contain bg-white dark:bg-black border border-gray-200 dark:border-gray-700 mx-auto"
+                  />
+                  <div className="text-[10px] font-mono text-gray-400 uppercase tracking-wider mt-3 mb-1.5">
+                    Elements ({screen.elements.length})
+                  </div>
+                  <div className="space-y-1">
+                    {screen.elements.map((el, j) => {
+                      const colorClass = elementTypeColors[el.element_type] || "bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-gray-300";
+                      return (
+                        <div key={j} className="flex items-center gap-2">
+                          <span className={`text-[9px] font-mono px-1.5 py-0.5 ${colorClass} shrink-0 uppercase`}>
+                            {el.element_type}
+                          </span>
+                          <span className="text-[11px] text-gray-700 dark:text-gray-300 truncate">{el.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block border border-gray-200 dark:border-gray-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-gray-800">
@@ -167,7 +224,7 @@ export function AtlasReport({ screenMap, screenshotBase }: AtlasReportProps) {
         <h2 className="text-[10px] font-mono text-gray-400 uppercase tracking-widest mb-4 border-b border-gray-200 dark:border-gray-800 pb-2">
           Summary
         </h2>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           {[
             { label: "Screens", value: screenMap.screens.length },
             { label: "Transitions", value: screenMap.transitions.length },
@@ -186,7 +243,7 @@ export function AtlasReport({ screenMap, screenshotBase }: AtlasReportProps) {
         </div>
       </section>
 
-      {/* Screen inventory — expandable rows */}
+      {/* Screen inventory — expandable rows (desktop table + mobile stacked list) */}
       <ScreenInventorySection screenMap={screenMap} screenshotBase={screenshotBase} />
 
       {/* User paths */}

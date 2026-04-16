@@ -318,10 +318,9 @@ function AtlasFlowInner({ screenMap, screenshotBase }: AtlasFlowInnerProps) {
     setTimeout(() => fitView({ padding: 0.12, duration: 600 }), 300);
   }, [fitView]);
 
-  // Navigate to a screen + center map
-  const selectScreen = useCallback(
+  // Center map on a screen node (no panel side-effect — used by journey nav on mobile)
+  const centerOnScreen = useCallback(
     (screenId: string) => {
-      setActiveScreenId(screenId);
       const node = getNode(screenId);
       if (node) {
         setCenter(node.position.x + NODE_WIDTH / 2, node.position.y + NODE_HEIGHT / 2, { zoom: 0.85, duration: 400 });
@@ -330,14 +329,25 @@ function AtlasFlowInner({ screenMap, screenshotBase }: AtlasFlowInnerProps) {
     [getNode, setCenter]
   );
 
-  // Journey controls
+  // Navigate to a screen — opens the ScreenPanel + centers the map (used by node clicks)
+  const selectScreen = useCallback(
+    (screenId: string) => {
+      setActiveScreenId(screenId);
+      centerOnScreen(screenId);
+    },
+    [centerOnScreen]
+  );
+
+  // Journey controls — center map only, never auto-open ScreenPanel.
+  // On mobile, ScreenPanel is fullscreen and would hide the journey navigator.
+  // On desktop the user can still tap a node to open the right-rail screen detail.
   const handleSelectPath = useCallback((idx: number) => {
     const path = paths[idx];
     setSelectedPathIdx(idx);
     setStepIndex(0);
     setHighlightedPath(path);
-    selectScreen(path[0]);
-  }, [paths, selectScreen]);
+    centerOnScreen(path[0]);
+  }, [paths, centerOnScreen]);
 
   const handleClearPath = useCallback(() => {
     setSelectedPathIdx(null);
@@ -350,8 +360,8 @@ function AtlasFlowInner({ screenMap, screenshotBase }: AtlasFlowInnerProps) {
     const path = paths[selectedPathIdx];
     const clamped = Math.max(0, Math.min(i, path.length - 1));
     setStepIndex(clamped);
-    selectScreen(path[clamped]);
-  }, [selectedPathIdx, paths, selectScreen]);
+    centerOnScreen(path[clamped]);
+  }, [selectedPathIdx, paths, centerOnScreen]);
 
   const handleNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
