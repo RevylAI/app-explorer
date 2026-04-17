@@ -12,10 +12,13 @@ from rich.table import Table
 from . import store
 from .models import Element
 from .report import generate_report
+from .skeleton import ios as skeleton_ios
 
 app = typer.Typer(name="app-explorer", help="Map every screen and user path in a mobile app.")
 screen_app = typer.Typer(help="Manage discovered screens.")
 app.add_typer(screen_app, name="screen")
+skeleton_app = typer.Typer(help="Static screen-skeleton extraction from compiled binaries.")
+app.add_typer(skeleton_app, name="skeleton")
 
 console = Console()
 
@@ -145,6 +148,77 @@ def report(
             raise typer.Exit(1)
         console.print(f"Report generated: [bold]{result['report_path']}[/bold]")
         console.print(f"  Screens: {result['screens']} | Transitions: {result['transitions']} | Coverage: {result['coverage_pct']}%")
+
+
+# ── skeleton ──────────────────────────────────────────────────────────
+
+
+@skeleton_app.command("ios")
+def skeleton_ios_cmd(
+    input_path: Path = typer.Argument(..., help="Path to .ipa or .app"),
+    output: Path = typer.Option(
+        Path("workspace/skeleton.json"), "--output", "-o",
+        help="JSON output path (default: workspace/skeleton.json)",
+    ),
+    report: Path = typer.Option(
+        Path("reports/skeleton.md"), "--report",
+        help="Markdown report path (default: reports/skeleton.md)",
+    ),
+    work_dir: Path = typer.Option(
+        None, "--work-dir",
+        help="Reuse this dir for IPA extraction (default: temp dir, cleaned up)",
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Print stats as JSON to stdout"),
+):
+    """Extract a static screen skeleton from an iOS .ipa or .app.
+
+    Run this BEFORE BFS exploration to give the agent a target list of every
+    screen the binary contains. The agent uses the skeleton to know what to
+    look for and to assign stable IDs when it reaches a screen at runtime.
+    """
+    output.parent.mkdir(parents=True, exist_ok=True)
+    report.parent.mkdir(parents=True, exist_ok=True)
+
+    skeleton = skeleton_ios.extract_skeleton(input_path, work_dir=work_dir, log=not as_json)
+    output.write_text(json.dumps(skeleton, indent=2))
+    report.write_text(skeleton_ios.render_markdown_report(skeleton))
+
+    summary = {
+        "json": str(output),
+        "report": str(report),
+        "stats": skeleton["stats"],
+        "app": {k: skeleton["app"].get(k) for k in (
+            "bundle_id", "bundle_name", "version", "url_schemes",
+        )},
+    }
+    if as_json:
+        console.print_json(json.dumps(summary))
+    else:
+        s = skeleton["stats"]
+        console.print(f"[green]OK[/green]: {s['candidate_screens']} candidate screens "
+                      f"({s['screens_by_kind']}), {s['deep_link_entries']} deep-link entries")
+        console.print(f"  json:   [bold]{output}[/bold]")
+        console.print(f"  report: [bold]{report}[/bold]")
+
+
+@skeleton_app.command("android")
+def skeleton_android_cmd(
+    input_path: Path = typer.Argument(None, help="Path to .apk or .aab (when supported)"),
+):
+    """Extract a static screen skeleton from an Android .apk or .aab.
+
+    NOT YET IMPLEMENTED. Use `app-explorer skeleton ios` for iOS today.
+
+    Android support is on the roadmap — it will use apktool + androguard + jadx
+    to enumerate Activities, Fragments, and Compose nav destinations from the APK.
+    """
+    console.print("[yellow]Android skeleton extraction is not yet implemented.[/yellow]")
+    console.print()
+    console.print("iOS works today: [bold]app-explorer skeleton ios <path-to-ipa-or-app>[/bold]")
+    console.print()
+    console.print("Android is on the roadmap — it will use apktool + androguard + jadx")
+    console.print("to enumerate Activities, Fragments, and Compose nav destinations.")
+    raise typer.Exit(2)
 
 
 # ── reset ─────────────────────────────────────────────────────────────

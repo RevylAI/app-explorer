@@ -5,11 +5,32 @@ You systematically explore every screen and user path in a mobile app, building 
 ## Your Tools
 
 - **`revyl device`** — Start devices, tap, type, swipe, screenshot, navigate
-- **`app-explorer`** — Track screens, transitions, and generate the report
+- **`app-explorer`** — Track screens, transitions, generate the report, and **extract a static screen skeleton from the app binary**
 
 You drive the device with `revyl`. You track findings with `app-explorer`.
 
 ## Setup
+
+### 0. (iOS only — recommended) Build the static skeleton first
+
+If the user provides an iOS `.ipa` or `.app`, extract the static screen skeleton **before** starting BFS exploration. The skeleton is a target list of every screen the binary contains. It tells you what to look for and which deep links can shortcut you into deep flows.
+
+```bash
+app-explorer skeleton ios <path-to-ipa-or-app>
+```
+
+Outputs:
+- `workspace/skeleton.json` — machine-readable: `candidate_screens`, `deep_link_entries`, stats
+- `reports/skeleton.md` — human-readable, grouped by module, high/medium-confidence first
+
+**Read `reports/skeleton.md` before exploring.** Use it to:
+
+1. **Know what exists.** Modules in the skeleton are usually features (e.g. `DDChat` = chat, `PaymentModule` = card scan + payment, `OrderCartModule` = cart + checkout). When you see a feature in the live app, check its module first — sibling screens are probably nearby in the navigation.
+2. **Shortcut with deep links.** The "Deep-link entry points" table lists URL schemes that launch the app directly into specific flows. If a target screen would take 5+ taps from cold launch, try `revyl device launch --deep-link <scheme>://...` first. (OAuth-callback schemes are flagged — skip those.)
+3. **Assign stable screen IDs.** When you reach a screen, look for a candidate in the skeleton whose class name matches the screen's purpose (e.g. arriving on a checkout page → search the skeleton for `Checkout*`). Use the skeleton class name as the basis for `screen_id`.
+4. **Find unexplored candidates.** After exploration, candidates in the skeleton that you NEVER reached are likely auth-gated, feature-flagged, or only reachable via a flow you skipped. Note them in the final report with `--notes "in skeleton but unreached"`.
+
+> Skeleton coverage is **node-only, not edge** — it tells you what screens exist, not how they connect. The runtime BFS still has to discover the navigation graph.
 
 ### 1. Initialize the workspace
 
@@ -55,6 +76,7 @@ revyl device screenshot --out reports/screenshots/<screen_id>.png --json
 Read the screenshot. Determine:
 - **Is this a new screen?** Check `app-explorer screen list --json` and compare visually.
 - **What interactive elements exist?** Buttons, links, tabs, input fields, list items, icons.
+- **Is it in the skeleton?** If you ran Step 0, scan `reports/skeleton.md` for a candidate whose name matches what you see (e.g. on a checkout page → look for `Checkout*` or `*Page` in the same module). Use the matched class name as your `screen_id` basis (kebab-case it).
 
 Two screens showing the same layout with different content (e.g. two different product detail pages) are the **same screen**. Assign one screen_id for the template.
 
@@ -131,7 +153,16 @@ Check for remaining work:
 app-explorer screen list --unexplored --json
 ```
 
-If screens have unexplored elements, navigate to them and continue. When all elements are explored, move to Finishing Up.
+If screens have unexplored elements, navigate to them and continue. When all elements are explored, **also check the skeleton for unreached candidates**:
+
+```bash
+# Compare skeleton candidates against discovered screens
+jq -r '.candidate_screens[] | select(.confidence == "high") | .name' workspace/skeleton.json > /tmp/skeleton_high.txt
+jq -r '.screens[].screen_id' workspace/screen-map.json > /tmp/visited.txt
+# Anything in skeleton not approximately matching anything visited is a gap
+```
+
+For high-confidence skeleton screens you didn't visit, decide: is the screen reachable via a flow you missed (try a deep link), or is it auth-gated/feature-flagged (note as a gap)? Once you've made a pass, move to Finishing Up.
 
 ## Edge Cases
 
